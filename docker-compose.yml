@@ -1,0 +1,52 @@
+networks:
+  monitoring:           # réseau partagé entre tous les conteneurs
+
+volumes:
+  prometheus_data:      # persistance des métriques Prometheus
+  grafana_data:         # persistance des dashboards Grafana
+
+services:
+
+  # ── 1. Votre application Node.js
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    networks: [monitoring]
+    restart: unless-stopped
+
+  # ── 2. Prometheus — collecte et stocke les métriques
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9090:9090"
+    networks: [monitoring]
+    restart: unless-stopped
+
+  # ── 3. Grafana — visualisation des métriques
+  grafana:
+    image: grafana/grafana:10.2.0
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin123
+    volumes:
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3001:3000"       # Grafana écoute en interne sur 3000, on expose sur 3001
+    networks: [monitoring]
+    depends_on: [prometheus]
+    restart: unless-stopped
+
+  # ── 4. Node Exporter — métriques système (CPU, RAM, disque...)
+  node-exporter:
+    image: prom/node-exporter:v1.7.0
+    ports:
+      - "9100:9100"
+    networks: [monitoring]
+    restart: unless-stopped
